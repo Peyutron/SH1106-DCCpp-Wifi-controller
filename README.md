@@ -2,6 +2,8 @@
 
 ## Controlador para centrales DCC++ y librerías DCCPP
 
+[Web del proyecto](http://lamaquetade.infotronikblog.com/2026-02-27-DCC-controller-ESP32-3C-mini-y-display-SH1106/){:alt="Controlador DCC con ESP32 3C mini y display SH1106" title="Controlador DCC con ESP32 3C mini y display SH1106"}
+
 * ESP32-C3
 * Módulo SH1106 con encoder rotatorio
 
