@@ -3,6 +3,7 @@
 ## Controlador para centrales DCC++ y librerías DCCPP
 
 [Web del proyecto](http://lamaquetade.infotronikblog.com/2026-02-27-DCC-controller-ESP32-3C-mini-y-display-SH1106/)
+
 [Idea original](https://www.infotronikblog.com/2026/01/esp32-c3-super-mini-oled-sh1106.html)
 
 * ESP32-C3
