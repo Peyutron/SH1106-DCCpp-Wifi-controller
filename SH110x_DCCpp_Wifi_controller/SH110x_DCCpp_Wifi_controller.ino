@@ -1,7 +1,7 @@
 /**
   * Version: DCC Controller ESP32 C3
   * Project instructions: 
-    - http://lamaquetade.infotronikblog.com/
+    - http://lamaquetade.infotronikblog.com/2026-02-27-DCC-controller-ESP32-3C-mini-y-display-SH1106/
     - https://www.infotronikblog.com/2026/01/esp32-c3-super-mini-oled-sh1106.html
   *  
   * Project repository:  
@@ -21,6 +21,7 @@
   * Board -> ESP32C3 Dev Module
   * Use CDC on boot "enabled"
   * CPU Frequency "80MHz (wifi)"
+  * Board Version 2.0.14
   *
 **/
 
@@ -28,7 +29,8 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SH110X.h>
 #include <WiFi.h>
-#include <WiFiClient.h>
+//#include <esp_wifi.h>
+//#include <WiFiClient.h>
 #include "logo.h"
 
 // Configuración WiFi y servidor (modifica según tus necesidades)
@@ -86,6 +88,7 @@ WiFiClient client;
 bool clientConnected = false;
 String clientStatus = "";
 String lastServerResponse = "";
+#define MAXSERVERTRY 20
 
 // actualizar Información del sistema
 unsigned long lastUpdate = 0;
@@ -94,46 +97,30 @@ const unsigned long updateInterval = 5000; // Actualizar cada 5 segundos
 // Objeto para la pantalla SH1106
 Adafruit_SH1106G display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-// ISR para el encoder rotatorio
-void IRAM_ATTR rotaryEncoder() 
-{
-  rotaryAState = digitalRead(PIN_ROTARY_A);
-  if (rotaryAState != rotaryALastState) {
-    if (digitalRead(PIN_ROTARY_B) != rotaryAState) 
-    {
-      encoderPos++;
-    } else {
-      encoderPos--;
-    }
-  }
-  rotaryALastState = rotaryAState;
-}
-
 
 // Variables para el programa principal
-const int numIDs = 10; // Número de IDs en el array
+const int numIDs = 7; // Número de IDs en el array
 int currentLocomotiveIndex = 0; // Índice de la locomotora actual (0-9)
 
 // Estructura para almacenar datos de cada locomotora
 struct Locomotora {
+  String shortName;
   int id;           // ID de la locomotora (1-10)
   int direccionDCC; // Dirección DCC (entero)
   int velocidad;    // Velocidad actual (0-255)
-  bool direccion;    // Dirección (1: adelante, 0: atrás)
+  bool direccion;    // Dirección (1: avance, 0: atrás)
 };
 
-// Array de 10 locomotoras
+// Array de 7 locomotoras
 Locomotora locomotoras[numIDs] = {
-  {1, 3, 0, 1},   // ID 1, Dirección DCC 3, velocidad 0, adelante
-  {5, 5, 0, 1},   // ID 2, Dirección DCC 5, velocidad 0, adelante
-  {3, 7, 0, 1},   // ID 3, Dirección DCC 7, velocidad 0, adelante
-  {4, 9, 0, 1},   // ID 4, Dirección DCC 9, velocidad 0, adelante
-  {5, 11, 0, 1},  // ID 5, Dirección DCC 11, velocidad 0, adelante
-  {6, 13, 0, 1},  // ID 6, Dirección DCC 13, velocidad 0, adelante
-  {7, 15, 0, 1},  // ID 7, Dirección DCC 15, velocidad 0, adelante
-  {8, 17, 0, 1},  // ID 8, Dirección DCC 17, velocidad 0, adelante
-  {9, 19, 0, 1},  // ID 9, Dirección DCC 19, velocidad 0, adelante
-  {10, 21, 0, 1}  // ID 10, Dirección DCC 21, velocidad 0, adelante
+  {"Valenciana", 1, 4, 0, 1}, // ID 1, Dirección DCC 4, velocidad 0, avance
+  {"Talgo 352", 2, 7, 0, 1},  // ID 2, Dirección DCC 7, velocidad 0, avance
+  {"Infraestr", 3, 6, 0, 1},  // ID 3, Dirección DCC 6, velocidad 0, avance
+  {"AVE", 4, 5, 0, 1},        // ID 4, Dirección DCC 5, velocidad 0, avance
+  {"DR132", 5, 8, 0, 1},      // ID 5, Dirección DCC 8, velocidad 0, avance
+  {"269 Renfe", 6, 9, 0, 1},  // ID 6, Dirección DCC 9, velocidad 0, avance
+  {"242 Iber", 7, 11, 0, 1}   // ID 7, Dirección DCC 11, velocidad 0, avance
+  
 };
 
 
@@ -154,22 +141,37 @@ struct Desvio
 
 // Array de desvíos (puedes ajustar la cantidad)
 int currentDesvioIndex = 0;  // Índice del desvío actual
-const int numDesvios = 12;
+const int numDesvios = 10;
 Desvio desvios[numDesvios] = 
 {
-  {0, 0, 0, "Desvio 1"},   // Dirección 0, Sub 0
-  {0, 1, 0, "Desvio 2"},   // Dirección 0, Sub 1
-  {0, 2, 0, "Desvio 3"},   // Dirección 0, Sub 2
-  {0, 3, 0, "Desvio 4"},   // Dirección 0, Sub 3
-  {1, 0, 0, "Desvio 5"},   // Dirección 1, Sub 0
-  {1, 1, 0, "Desvio 6"},   // Dirección 1, Sub 1
-  {1, 2, 0, "Desvio 7"},   // Dirección 1, Sub 2
-  {1, 3, 0, "Desvio 8"},   // Dirección 1, Sub 3
+  // {0, 0, 0, "Desvio 1"},   // Dirección 0, Sub 0
+  // {1, 0, 0, "Luces 5"},   // Dirección 1, Sub 0
+  {1, 1, 0, "luces"},   // Dirección 1, Sub 1
+  {1, 2, 0, "Casas"},   // Dirección 1, Sub 2
+  {1, 3, 0, "Luces Taller"},   // Dirección 1, Sub 3
   {2, 0, 0, "Desvio 9"},   // Dirección 2, Sub 0
-  {2, 1, 0, "Desvio 10"},  // Dirección 2, Sub 1
-  {2, 2, 0, "Desvio 11"},  // Dirección 2, Sub 2
-  {2, 3, 0, "Desvio 12"}   // Dirección 2, Sub 3
+  {2, 1, 0, "Soldador"},  // Dirección 2, Sub 1
+  {2, 2, 0, "TV taller"},  // Dirección 2, Sub 2
+  {2, 3, 0, "Paso a nivel"},  // Dirección 2, Sub 3
+  {3, 0, 0, "Barriada"},  // Dirección 3, Sub 0
+  {5, 0, 0, "D.Principal"},  // Dirección 5, Sub 0
+  {5, 1, 0, "D.talleres"}  // Dirección 5, Sub 1
+
 };
+void IRAM_ATTR rotaryEncoder() 
+{
+  rotaryAState = digitalRead(PIN_ROTARY_A);
+  if (rotaryAState != rotaryALastState) {
+    if (digitalRead(PIN_ROTARY_B) != rotaryAState) 
+    {
+      encoderPos++;
+    } else {
+      encoderPos--;
+    }
+    delayMicroseconds(2);
+  }
+  rotaryALastState = rotaryAState;
+}
 
 /** Configuration setup */
 void setup() 
@@ -177,6 +179,8 @@ void setup()
   Serial.begin(115200);
   delay(100);
   
+
+
   // Inicializar I2C para la pantalla
   Wire.begin(OLED_SDA, OLED_SCL);
   
@@ -186,6 +190,8 @@ void setup()
     Serial.println("Error al iniciar SH1106");
     while(1);
   }
+    Serial.println("Iniciando programa...");
+
   
   display.clearDisplay();
   display.setTextSize(1);
@@ -205,7 +211,7 @@ void setup()
   // Conectar a WiFi
   wifiConnect();
 
-  actualizarVariablesLocomotora();
+  //actualizarVariablesLocomotora();
 
 }
 
@@ -290,3 +296,5 @@ void updateSysInfo()
     wifiRSSI = 0;
   }
 }
+
+

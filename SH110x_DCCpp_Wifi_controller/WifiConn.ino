@@ -7,6 +7,8 @@ void wifiConnect() // On setup()
   display.print(ssid);
   loadLogo();
   display.display();
+  // WiFi.mode(WIFI_STA);
+  // esp_wifi_set_ps(WIFI_PS_NONE); // Board version 3.3.7 problems
   WiFi.begin(ssid, password);
 
   int intentos = 0;
@@ -32,7 +34,7 @@ void wifiConnect() // On setup()
     display.display();
     conectarServidor();
 
-    delay(2000);
+    delay(1000);
   } 
   else 
   {
@@ -54,6 +56,7 @@ void wifiConnect() // On setup()
 */
 void conectarServidor() 
 {
+  static int nextServer = 0;
   display.clearDisplay();
   loadLogo();
   display.setCursor(0, 0);
@@ -64,7 +67,7 @@ void conectarServidor()
   WiFi.begin(ssid, password);
   
   int intentos = 0;
-  display.setCursor(0, 9);
+  display.setCursor(0, 10);
   while (WiFi.status() != WL_CONNECTED && intentos < 20) {
     delay(500);
     display.print(".");
@@ -73,6 +76,7 @@ void conectarServidor()
   }
   
   if (WiFi.status() == WL_CONNECTED) {
+    //delay(500);
     wifiConnected = true;
     wifiStatus = "Connected";
     wifiRSSI = WiFi.RSSI();
@@ -82,26 +86,56 @@ void conectarServidor()
     display.setCursor(0, 0);
     display.println("WiFi Connected!");
     display.print("IP: ");
-    display.println(WiFi.localIP());
+    display.println(WiFi.localIP());    
+    Serial.println(F("WiFi Connected!"));
+    Serial.print(F("IP: "));
+    Serial.println(WiFi.localIP());
     display.display();
-    delay(1000);
+    delay(2000);
     display.clearDisplay();
     loadLogo(); 
     display.setCursor(10, 0);
     display.print("Server ");
     // Intentar conexión inicial con el servidor
+    // if (client.connect(serversIPS[nextServer].c_str(), serverPort)) 
+    int serverTry = 0;
+    while (!client.connected() && serverTry < MAXSERVERTRY)
+    {
     if (client.connect(serverIP, serverPort)) 
     {
       clientConnected = true;
       clientStatus = "Running";
       display.print(clientStatus);
+      Serial.println(clientStatus);
       display.display();
-    } else {
-      clientStatus = "Error";
-      display.print(clientStatus);
-      display.setCursor(10, 9);
-      display.println("Check Server IP ");
+    } 
+    else 
+    {
+      clientStatus = " Error ";
+      //display.print(clientStatus);
+      Serial.println(clientStatus);
+      display.setCursor(0, 9);
+      display.print("F: ");
+      display.print(serverIP);
+      display.print(":");
+      display.print(serverPort);
+      // Linea 2
+      display.setCursor(0, 19);
+      display.print("Intento:    ");
+      display.fillRect(50, 19, 9, 9, SH110X_BLACK);
+      display.setCursor(50, 19);
+      display.print(serverTry);
+      display.print("/");
+      display.print(MAXSERVERTRY);
+      Serial.print(F("Check Server IP "));
+      Serial.print(serverIP);
+      Serial.print(":");
+      Serial.print(serverPort);
+
       display.display();
+      serverTry++;
+      
+    }
     }
     delay(2000);
   } 

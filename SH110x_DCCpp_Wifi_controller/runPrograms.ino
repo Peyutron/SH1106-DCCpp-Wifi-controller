@@ -39,8 +39,9 @@ void runMainProgram()
   if (encoderPos >= barMax) encoderPos = barMax;
   else if (encoderPos <= 0) encoderPos = 0;
   
+  if (barPosition != encoderPos) barPosition = encoderPos;
   // Actualizar posición de la barra con el encoder
-  barPosition = encoderPos;
+  
   
   // Si la posición cambió, actualizar velocidad y enviar datos
   if (barPosition != lastBarPosition) 
@@ -63,8 +64,10 @@ void runMainProgram()
   }
   
   // Botón confirm cambia de locomotora
-  if (confirmPressed) {
-    currentLocomotiveIndex = (currentLocomotiveIndex + 1) % 10; // 10 locomotoras
+  if (confirmPressed) 
+  { 
+    currentLocomotiveIndex++; // 10 locomotoras
+    if (currentLocomotiveIndex >= numIDs) currentLocomotiveIndex = 0;
     actualizarVariablesLocomotora(); // Cargar los datos de la nueva locomotora
     sendWifiData(locomotiveData());  // Enviar los datos de la nueva locomotora
     showScreen = true;

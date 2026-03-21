@@ -7,8 +7,8 @@ void showMenu()
     // Mostrar menú principal
     display.clearDisplay();
     display.setTextSize(1);
-    display.setCursor(30, 0); // Posición del titulo
-    display.println("= Main menu =");
+    display.setCursor(25, 0); // Posición del titulo
+    display.println("- Main menu -");
     
     int separacion = 10;
     for (int i = 0; i < menuItems; i++) 
@@ -28,13 +28,14 @@ void showMenu()
     // Mostrar estado WiFi en la parte inferior
     display.setTextSize(1);
     display.setCursor(0, 56);
-    display.print("Server:");
-    display.print(clientStatus);
+    display.print("Ser:");
+    if (!client.connected()) display.print(clientStatus);
+    else display.print(serverIP);
     if (wifiConnected)
     {
       display.print(" ");
       display.print(wifiRSSI);
-      display.print("dBm");
+      display.print("dB");
     }
     display.display();
   } 
@@ -81,34 +82,39 @@ void showMainScreen()
 {
   display.clearDisplay();
   display.setTextSize(1);
-  display.setCursor(25, 0);
-  display.print("= LOCOMOTORA =");
-  
-  // Mostrar ID y dirección DCC
-  display.setCursor(5, 10);
+  display.setCursor(0, 0);
   display.print("ID: ");
   display.print(locomotoras[currentLocomotiveIndex].id);
-  display.print(" (DCC:");
+  display.print(" ");
+  display.print(locomotoras[currentLocomotiveIndex].shortName);
+ 
+  
+  //Dirección DCC
+  display.setCursor(10, 10);
+  display.print("DCC: ");
   display.print(locomotoras[currentLocomotiveIndex].direccionDCC);
-  display.print(")");
   
   // Mostrar dirección con flechas
-  display.setCursor(5, 19);
+  display.setCursor(10, 19);
   display.print("Dir: ");
   if (locomotoras[currentLocomotiveIndex].direccion == 1) display.print("FWD >>");
   else display.print("BCK <<");
   
   // Mostrar velocidad
-  display.setCursor(5, 28);
+  display.setCursor(10, 28);
   display.print("Speed: "); display.print(locomotoras[currentLocomotiveIndex].velocidad);
+  
+  // Dibujar barra de velocidad
+  int barWidth = map(locomotoras[currentLocomotiveIndex].velocidad, 0, 126, 0, 60);
+  display.drawRect(10, 40, 60, 10, SH110X_WHITE);
+  display.fillRect(10, 40, barWidth, 10, SH110X_WHITE);
+
+  display.setCursor(70, 40);
   display.print(" (");
   display.print(map(locomotoras[currentLocomotiveIndex].velocidad, 0, 126, 0, 100));
   display.print("%)");
   
-  // Dibujar barra de velocidad
-  int barWidth = map(locomotoras[currentLocomotiveIndex].velocidad, 0, 126, 0, 120);
-  display.drawRect(4, 40, 120, 10, SH110X_WHITE);
-  display.fillRect(4, 40, barWidth, 10, SH110X_WHITE);
+
 
   showServerResponses(lastServerResponse);
 
@@ -123,8 +129,8 @@ void showSecondaryScreen()
   display.setTextSize(1);
   
   // Título
-  display.setCursor(0, 0);
-  display.println("= DESVIOS =");
+  display.setCursor(25, 0);
+  display.println(F("- DESVIOS -"));
   
   // Mostrar lista de desvíos (6 en pantalla con scroll)
   int startIndex = max(0, currentDesvioIndex - 2);
@@ -161,14 +167,14 @@ void showSecondaryScreen()
 void showSysInfo() 
 {
   display.clearDisplay();
-  display.setCursor(20, 0); // Posición título
-  display.println("=SYS INFO=");
+  display.setCursor(25, 0); // Posición título
+  display.println(F("- SYS INFO -"));
   
   // Temperatura interna
   display.setCursor(0, 9);
   // Leer temperatura interna del ESP32-C3
   internalTemp = temperatureRead();
-  display.print("Temp ESP32: ");
+  display.print(F("Temp ESP32: "));
   display.print(internalTemp, 1);
   display.print(" C");
   
@@ -186,16 +192,19 @@ void showSysInfo()
     display.print(WiFi.localIP().toString());
     
     display.setCursor(0, 45);
-    display.print("signal: ");
-    display.print(wifiRSSI);
-    display.print(" dBm");
+    display.print("Server: ");
+    display.print(serverIP);
+    // display.print("signal: ");
+    // display.print(wifiRSSI);
+    // display.print(" dBm");
     display.setCursor(0, 54);
-    display.print("Quality: ");
+    display.print(F("Quality: "));
     int calidad = map(constrain(wifiRSSI, -100, -50), -100, -50, 0, 100);
     display.print(calidad);
     display.print("%");
   }
   display.display();
+  delay(50);
 }
 
 /** Muestra las respuestas del servidor en la parte inferior de la pantalla
@@ -203,11 +212,11 @@ void showSysInfo()
 void showServerResponses(String response)
 {
   // display.setCursor(10, 54);
-  display.fillRect(10,54, 100, 20, SH110X_BLACK);
+  display.fillRect(15, 54, 100, 20, SH110X_BLACK);
 
   if (response != "") 
   {
-    display.setCursor(10, 54);
+    display.setCursor(15, 54);
     if (response.length() > 12) {
       display.print(response.substring(0, 10) + "..");
     } 
@@ -216,8 +225,16 @@ void showServerResponses(String response)
       lastServerResponse = response;
       Serial.println(response);
       display.print(response);
+      if (response.indexOf(String(locomotoras[currentLocomotiveIndex].velocidad)) == -1)
+      {
+        Serial.println(locomotoras[currentLocomotiveIndex].velocidad);
+        delay(20);
+        sendWifiData(locomotiveData());
+      }
+        
     }
     display.display();
   }
   //
 }
+
