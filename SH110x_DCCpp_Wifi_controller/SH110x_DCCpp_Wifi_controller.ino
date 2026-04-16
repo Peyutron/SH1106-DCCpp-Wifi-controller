@@ -1,7 +1,7 @@
 /**
   * Version: DCC Controller ESP32 C3
   * Project instructions: 
-    - http://lamaquetade.infotronikblog.com/2026-02-27-DCC-controller-ESP32-3C-mini-y-display-SH1106/
+    - http://lamaquetade.infotronikblog.com//2026-02-27-DCC-controller-ESP32-3C-mini-y-display-SH1106/
     - https://www.infotronikblog.com/2026/01/esp32-c3-super-mini-oled-sh1106.html
   *  
   * Project repository:  
@@ -21,7 +21,7 @@
   * Board -> ESP32C3 Dev Module
   * Use CDC on boot "enabled"
   * CPU Frequency "80MHz (wifi)"
-  * Board Version 2.0.14
+  * Board Version 2.0.18
   *
 **/
 
@@ -29,14 +29,17 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SH110X.h>
 #include <WiFi.h>
-//#include <esp_wifi.h>
-//#include <WiFiClient.h>
 #include "logo.h"
+#include <EEPROM.h>   // Para Arduino AVR
+// Si usas ESP32 o ESP8266, incluye <EEPROM.h> también pero con diferentes métodos.
+
+#define EEPROM_SIZE 4   // Only 4 bytes
+#define EEPROM_ADDR_IP 0  // Start address
 
 // Configuración WiFi y servidor (modifica según tus necesidades)
 const char* ssid = "YourSSID";
 const char* password = "YourPass";
-const char* serverIP = "192.168.1.5";
+char serverIP[16] = "192.168.1.5";
 const int serverPort = 2560;
 
 // Pines según tu configuración
@@ -69,8 +72,8 @@ bool lastRotaryBtnState = HIGH;
 
 // Variables de menú
 int menuItem = 0;
-const int menuItems = 4;
-const char* menuNames[] = {"Start!", "Main", "Turnouts", "SysInfo"};
+const int menuItems = 6;
+const char* menuNames[] = {"Start!", "Main", "Turnouts", "IP Config", "SysInfo", "Restart"};
 bool inMenu = true;
 bool inSubMenu = false;
 int subMenuItem = 0;
@@ -88,11 +91,15 @@ WiFiClient client;
 bool clientConnected = false;
 String clientStatus = "";
 String lastServerResponse = "";
-#define MAXSERVERTRY 20
+#define MAXSERVERTRY 10
 
 // actualizar Información del sistema
 unsigned long lastUpdate = 0;
 const unsigned long updateInterval = 5000; // Actualizar cada 5 segundos
+
+// Enviar comando para no perder la conexión
+unsigned long lastUpdateCommand = 0;
+const unsigned long updateIntervalCommand = 8000; // Send Command <> every 8 segundos
 
 // Objeto para la pantalla SH1106
 Adafruit_SH1106G display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
@@ -100,10 +107,11 @@ Adafruit_SH1106G display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // Variables para el programa principal
 const int numIDs = 7; // Número de IDs en el array
-int currentLocomotiveIndex = 0; // Índice de la locomotora actual (0-9)
+int currentLocomotiveIndex = 0; // Índice de la locomotora actual (0-numIDs)
 
 // Estructura para almacenar datos de cada locomotora
-struct Locomotora {
+struct Locomotora 
+{
   String shortName;
   int id;           // ID de la locomotora (1-10)
   int direccionDCC; // Dirección DCC (entero)
@@ -112,17 +120,17 @@ struct Locomotora {
 };
 
 // Array de 7 locomotoras
-Locomotora locomotoras[numIDs] = {
+Locomotora locomotoras[numIDs] = 
+{
   {"Valenciana", 1, 4, 0, 1}, // ID 1, Dirección DCC 4, velocidad 0, avance
-  {"Talgo 352", 2, 7, 0, 1},  // ID 2, Dirección DCC 7, velocidad 0, avance
+  {"Talgo 352", 5, 7, 0, 1},  // ID 2, Dirección DCC 7, velocidad 0, avance
   {"Infraestr", 3, 6, 0, 1},  // ID 3, Dirección DCC 6, velocidad 0, avance
   {"AVE", 4, 5, 0, 1},        // ID 4, Dirección DCC 5, velocidad 0, avance
-  {"DR132", 5, 8, 0, 1},      // ID 5, Dirección DCC 8, velocidad 0, avance
+  {"DR132", 2, 8, 0, 1},      // ID 5, Dirección DCC 8, velocidad 0, avance
   {"269 Renfe", 6, 9, 0, 1},  // ID 6, Dirección DCC 9, velocidad 0, avance
   {"242 Iber", 7, 11, 0, 1}   // ID 7, Dirección DCC 11, velocidad 0, avance
   
 };
-
 
 // Variables para la barra del encoder
 int barPosition = 0;
@@ -158,6 +166,16 @@ Desvio desvios[numDesvios] =
   {5, 1, 0, "D.talleres"}  // Dirección 5, Sub 1
 
 };
+
+// Para el menú ConfigIP
+int ip[4] = {192, 168, 1, 82};   // NO CAMBIAR
+int octetoSeleccionado = -1; // or 0?
+bool configActiva = true;
+
+// Para el menú de confirmación
+int confirmMenuOption = 0;  // 0 = Sí, 1 = No
+bool inConfirmScreen = false;
+
 void IRAM_ATTR rotaryEncoder() 
 {
   rotaryAState = digitalRead(PIN_ROTARY_A);
@@ -168,7 +186,7 @@ void IRAM_ATTR rotaryEncoder()
     } else {
       encoderPos--;
     }
-    delayMicroseconds(2);
+    delayMicroseconds(4);
   }
   rotaryALastState = rotaryAState;
 }
@@ -179,20 +197,17 @@ void setup()
   Serial.begin(115200);
   delay(100);
   
-
-
   // Inicializar I2C para la pantalla
   Wire.begin(OLED_SDA, OLED_SCL);
   
   // Inicializar pantalla
   if(!display.begin(0x3C, true)) 
   {
-    Serial.println("Error al iniciar SH1106");
+    Serial.println(F("Error al iniciar SH1106"));
     while(1);
   }
-    Serial.println("Iniciando programa...");
+  Serial.println(F("Starting DCCpp Wifi Controller..."));
 
-  
   display.clearDisplay();
   display.setTextSize(1);
   display.setTextColor(SH110X_WHITE);
@@ -208,11 +223,14 @@ void setup()
   rotaryALastState = digitalRead(PIN_ROTARY_A);
   attachInterrupt(digitalPinToInterrupt(PIN_ROTARY_A), rotaryEncoder, CHANGE);
   
+  // Inicializar EEPROM
+  EEPROM.begin(EEPROM_SIZE);  // En ESP8266/ESP32 es necesario; en AVR no hace falta pero no daña
+  delay(50);
+  // saveIPToEEPROM(ip); // Only first start
+  loadIPFromEEPROM();         // Cargar IP guardada previamente
+
   // Conectar a WiFi
   wifiConnect();
-
-  //actualizarVariablesLocomotora();
-
 }
 
 /** Main Program loop
@@ -236,10 +254,18 @@ void loop()
   {
     updateSysInfo();
     lastUpdate = millis();
+  } 
+
+  if (client.connected())
+  {
+  if (millis() - lastUpdateCommand > updateIntervalCommand) 
+    {
+      sendRecursiveCommand();
+      lastUpdateCommand = millis();
+    }
   }
 
 }
-
 
 // Read buttons Confirm, back and rotatory encoder button
 void readButtons()
@@ -249,7 +275,7 @@ void readButtons()
   if (currentConfirm == LOW && lastConfirmState == HIGH) 
   {
     confirmPressed = true;
-    showScreen = true;
+    // showScreen = true;
     delay(50); // Debounce simple
   } else {
     confirmPressed = false;
@@ -261,22 +287,27 @@ void readButtons()
   if (currentBack == LOW && lastBackState == HIGH) 
   {
     backPressed = true;
-    showScreen = true;
+    //showScreen = true;
     delay(50);
-  } else backPressed = false;
+  } 
+  else backPressed = false;
   lastBackState = currentBack;
   
   // Botón rotary
   bool currentRotaryBtn = digitalRead(PIN_ROTARY_BTN);
-  if (currentRotaryBtn == LOW && lastRotaryBtnState == HIGH) {
+  if (currentRotaryBtn == LOW && lastRotaryBtnState == HIGH) 
+  {
     rotaryBtnPressed = true;
-    showScreen = true;
+    //showScreen = true;
     delay(50);
-  } else {
+  } 
+  else 
+  {
     rotaryBtnPressed = false;
   }
   lastRotaryBtnState = currentRotaryBtn;
 }
+
 /** Update signal RSSI 
 */
 void updateSysInfo() 
@@ -297,4 +328,37 @@ void updateSysInfo()
   }
 }
 
+// Save IP data on EEPROM
+void saveIPToEEPROM(int * ipArray) 
+{   
+  Serial.println(F("Guardando IP..."));
+  for (int i = 0; i < EEPROM_SIZE; i++) 
+  {
+    Serial.print(ipArray[i]);
+    if (i < EEPROM_SIZE -1 ) Serial.print(F("."));
+    EEPROM.write(EEPROM_ADDR_IP + i, ipArray[i]);
+    // #ifdef ESP32
+    EEPROM.commit();  // Necesario en ESP32
+    // #endif
+  }
+  Serial.println();
+}
 
+/** Load IP data from EEPROM and update array ip[]
+*/
+void loadIPFromEEPROM() 
+{
+  Serial.print(F("Recuperando IP: "));
+  for (int i = 0; i < 4; i++) 
+  {
+        int val = EEPROM.read(EEPROM_ADDR_IP + i);
+        // Si el valor es 255 (EEPROM virgen) o inválido, mantener valor por defecto
+        if (val >= 0 && val <= 255) {
+          Serial.print(val);
+          if (i < EEPROM_SIZE -1 ) Serial.print(F("."));
+          ip[i] = val;
+        }
+  }
+  Serial.println();
+  updateServerIP();
+}

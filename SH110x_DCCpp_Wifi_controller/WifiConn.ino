@@ -56,7 +56,6 @@ void wifiConnect() // On setup()
 */
 void conectarServidor() 
 {
-  static int nextServer = 0;
   display.clearDisplay();
   loadLogo();
   display.setCursor(0, 0);
@@ -68,21 +67,23 @@ void conectarServidor()
   
   int intentos = 0;
   display.setCursor(0, 10);
-  while (WiFi.status() != WL_CONNECTED && intentos < 20) {
+  while (WiFi.status() != WL_CONNECTED && intentos < 10) {
     delay(500);
     display.print(".");
     display.display();
     intentos++;
   }
   
-  if (WiFi.status() == WL_CONNECTED) {
+  if (WiFi.status() == WL_CONNECTED) 
+  {
     //delay(500);
     wifiConnected = true;
     wifiStatus = "Connected";
     wifiRSSI = WiFi.RSSI();
     
     display.clearDisplay();
-    loadLogo(); 
+    loadLogo();
+    delay(500); 
     display.setCursor(0, 0);
     display.println("WiFi Connected!");
     display.print("IP: ");
@@ -96,48 +97,49 @@ void conectarServidor()
     loadLogo(); 
     display.setCursor(10, 0);
     display.print("Server ");
+
     // Intentar conexión inicial con el servidor
-    // if (client.connect(serversIPS[nextServer].c_str(), serverPort)) 
     int serverTry = 0;
     while (!client.connected() && serverTry < MAXSERVERTRY)
     {
-    if (client.connect(serverIP, serverPort)) 
-    {
-      clientConnected = true;
-      clientStatus = "Running";
-      display.print(clientStatus);
-      Serial.println(clientStatus);
-      display.display();
-    } 
-    else 
-    {
-      clientStatus = " Error ";
-      //display.print(clientStatus);
-      Serial.println(clientStatus);
-      display.setCursor(0, 9);
-      display.print("F: ");
-      display.print(serverIP);
-      display.print(":");
-      display.print(serverPort);
-      // Linea 2
-      display.setCursor(0, 19);
-      display.print("Intento:    ");
-      display.fillRect(50, 19, 9, 9, SH110X_BLACK);
-      display.setCursor(50, 19);
-      display.print(serverTry);
-      display.print("/");
-      display.print(MAXSERVERTRY);
-      Serial.print(F("Check Server IP "));
-      Serial.print(serverIP);
-      Serial.print(":");
-      Serial.print(serverPort);
+      if (client.connect(serverIP, serverPort)) 
+      {
+        clientConnected = true;
+        clientStatus = "Running";
+        display.println(clientStatus);
+        display.println(serverIP);
 
-      display.display();
-      serverTry++;
-      
+        Serial.println(clientStatus);
+        display.display();
+      } 
+      else 
+      {
+        clientStatus = " Error ";
+        Serial.print(clientStatus);
+        display.setCursor(0, 9);
+        display.print("F: ");
+        display.print(serverIP);
+        display.print(":");
+        display.print(serverPort);
+        // Linea 2
+        display.setCursor(0, 19);
+        display.print("Intento:    ");
+        display.fillRect(50, 19, 9, 9, SH110X_BLACK);
+        display.setCursor(50, 19);
+        display.print(serverTry);
+        display.print(" /");
+        display.print(MAXSERVERTRY);
+        Serial.print(F(" check Server IP "));
+        Serial.print(serverIP);
+        Serial.print(":");
+        Serial.print(serverPort);
+        if (digitalRead(PIN_BACK) == 0) serverTry = 20;
+
+        display.display();
+        serverTry++;
+      }
     }
-    }
-    delay(2000);
+  delay(1500);
   } 
   else 
   {
@@ -152,6 +154,13 @@ void conectarServidor()
     display.display();
     delay(5000);
   }
+}
+
+/** Update serverIP array
+*/
+void updateServerIP() 
+{
+    snprintf(serverIP, sizeof(serverIP), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
 }
 
 /** Read data from DCC station
@@ -180,12 +189,10 @@ void sendWifiData(String dataToSend)
   Serial.print("Send: ");
   Serial.println(dataToSend);
   
-  // Enviar datos al servidor por WiFi
-  if (WiFi.status() == WL_CONNECTED) client.println(dataToSend); // Enviar datos (formato simple) 
-  else showServerResponses("Sin WiFi");
+  // Send data to DCCpp server
+  if (client.connected()) client.println(dataToSend); // Enviar datos (formato simple) 
+  else showServerResponses("Server Fail");
 
-  // Aquí puedes agregar el envío real de datos cuando tengas la comunicación
-  // Por ejemplo: enviar por WiFi, UART, etc.
 }
 
 /** Create locomotive command
@@ -208,6 +215,13 @@ String accessoryData()
                       String(desvios[currentDesvioIndex].subdireccion) + " " + 
                       String(desvios[currentDesvioIndex].estado) +
                       ">";
+}
+
+/** Send current command every updateIntervalCommand
+*/
+void sendRecursiveCommand()
+{
+  sendWifiData("<c>");
 }
 
 /** Load logo DCCPP LMD
