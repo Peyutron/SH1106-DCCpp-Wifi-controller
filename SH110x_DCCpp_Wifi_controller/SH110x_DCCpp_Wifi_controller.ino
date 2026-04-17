@@ -23,6 +23,13 @@
   * CPU Frequency "80MHz (wifi)"
   * Board Version 2.0.18
   *
+  * Cambios 16-04-2026:
+  * - IP configurable en menu principal "Config".
+  * - Posibilidad de resetear el módulo ESP32C3 desde menu principal "Restart".
+  * - Envía el comando <c> (petición de consumo de la central) cada 8s 
+  *   para no perder la conexión con el servidor.
+  * - Desvíos y locomotoras tienen su propia estructura de datos.
+  * 
 **/
 
 #include <Wire.h>
