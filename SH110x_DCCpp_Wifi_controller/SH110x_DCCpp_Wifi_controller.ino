@@ -4,8 +4,12 @@
     - http://lamaquetade.infotronikblog.com//2026-02-27-DCC-controller-ESP32-3C-mini-y-display-SH1106/
     - https://www.infotronikblog.com/2026/01/esp32-c3-super-mini-oled-sh1106.html
   *  
-  * Project repository:  
-  * web: https://www.infotronikblog.com
+  * GitHub Project repository:
+    - https://github.com/Peyutron/SH1106-DCCpp-Wifi-controller
+  * GitHub repository:
+    - https://github.com/Peyutron
+  * Web:
+    - https://www.infotronikblog.com
   * Creator: Carlos MC
   *
   * External Library:
